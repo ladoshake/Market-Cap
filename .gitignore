@@ -1,0 +1,9 @@
+# 项目内部记忆与工作目录（含本地记忆，不上传）
+.workbuddy/
+
+# 临时探针脚本
+probe_cols.py
+
+# Python 缓存
+__pycache__/
+*.pyc
