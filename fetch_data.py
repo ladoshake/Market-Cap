@@ -238,10 +238,10 @@ def fetch_hk():
             "_gt": "hk" + code,
         })
     recs.sort(key=lambda r: r["total_mv"], reverse=True)
-    # 剔除场外交易(-T)与人民币柜台(-R)股票，仅保留港币主柜台
+    # 剔除场外交易(-T)、人民币柜台(-R)、同股不同权人民币柜台(-WR)股票，仅保留港币主柜台
     recs = [r for r in recs
-            if not (r["name"] or "").endswith(("-T", "-R"))
-            and not (r["code"] or "").endswith(("-T", "-R"))]
+            if not (r["name"] or "").endswith(("-T", "-R", "-WR"))
+            and not (r["code"] or "").endswith(("-T", "-R", "-WR"))]
     top = recs[:30]
 
     # 4) 补全名称/价格/涨跌幅（再批量取一次）
