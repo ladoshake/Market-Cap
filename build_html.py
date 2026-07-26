@@ -69,7 +69,6 @@ TEMPLATE = r"""<!DOCTYPE html>
   .up{color:var(--up);font-weight:600}
   .down{color:var(--down);font-weight:600}
   .flat{color:var(--muted)}
-  .code{color:var(--muted);font-family:ui-monospace,monospace;font-size:12px}
   .chip{display:inline-block;background:var(--chip);border-radius:6px;padding:2px 8px;font-size:12px;color:var(--muted)}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:18px 0}
   @media(max-width:680px){
@@ -103,9 +102,7 @@ TEMPLATE = r"""<!DOCTYPE html>
             <th data-k="pct">涨跌幅</th>
             <th data-k="change">涨跌额</th>
             <th data-k="total_mv">总市值</th>
-            <th data-k="float_mv">流通市值</th>
             <th data-k="pe">市盈率</th>
-            <th data-k="pb">市净率</th>
             <th data-k="board">板块</th>
           </tr>
         </thead>
@@ -171,15 +168,13 @@ function render(){
   document.getElementById("tbody").innerHTML = rows.map(s=>`
     <tr>
       <td>${s.rank}</td>
-      <td class="code">${s.code}</td>
+      <td>${s.code}</td>
       <td>${s.name}</td>
       <td>${fmtPrice(s.price, sym)}</td>
       <td class="${cls(s.pct)}">${fmtPct(s.pct)}</td>
       <td class="${cls(s.change)}">${s.change==null?"-":(s.change>0?"+":"")+s.change.toFixed(2)}</td>
       <td>${fmtYi(s.total_mv, cur)}</td>
-      <td>${s.float_mv==null?"-":fmtYi(s.float_mv, cur)}</td>
       <td>${s.pe==null?"-":s.pe.toFixed(2)}</td>
-      <td>${s.pb==null?"-":s.pb.toFixed(2)}</td>
       <td><span class="chip">${s.board||"-"}</span></td>
     </tr>`).join("");
   document.getElementById("count").textContent = `共 ${rows.length} 只`;
