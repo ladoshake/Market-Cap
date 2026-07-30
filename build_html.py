@@ -73,8 +73,8 @@ TEMPLATE = r"""<!DOCTYPE html>
   /* 冻结前2列（排名/名称） */
   .tbl-scroll{position:relative}
   .fz{position:sticky;background:var(--card);z-index:2}
-  .fz1{left:0;width:48px;min-width:48px}
-  .fz2{left:48px;width:120px;min-width:120px;box-shadow:1px 0 0 var(--line)}
+  .fz1{left:0;width:40px;min-width:40px}
+  .fz2{left:40px;width:80px;min-width:80px;box-shadow:1px 0 0 var(--line)}
   thead th.fz{background:#fafbfc;z-index:3}
   tbody tr:hover .fz{background:var(--accent-soft)}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:18px 0}
