@@ -70,12 +70,11 @@ TEMPLATE = r"""<!DOCTYPE html>
   .down{color:var(--down);font-weight:600}
   .flat{color:var(--muted)}
   .chip{display:inline-block;background:var(--chip);border-radius:6px;padding:2px 8px;font-size:12px;color:var(--muted)}
-  /* 冻结前3列（排名/代码/名称） */
+  /* 冻结前2列（排名/名称） */
   .tbl-scroll{position:relative}
   .fz{position:sticky;background:var(--card);z-index:2}
-  .fz1{left:0;width:64px;min-width:64px}
-  .fz2{left:64px;width:96px;min-width:96px}
-  .fz3{left:160px;width:150px;min-width:150px;box-shadow:2px 0 0 var(--line)}
+  .fz1{left:0;width:48px;min-width:48px}
+  .fz2{left:48px;width:120px;min-width:120px;box-shadow:2px 0 0 var(--line)}
   thead th.fz{background:#fafbfc;z-index:3}
   tbody tr:hover .fz{background:var(--accent-soft)}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:18px 0}
@@ -104,8 +103,8 @@ TEMPLATE = r"""<!DOCTYPE html>
         <thead>
           <tr>
             <th data-k="rank" class="fz fz1">排名</th>
-            <th data-k="code" class="fz fz2">代码</th>
-            <th data-k="name" class="fz fz3">名称</th>
+            <th data-k="name" class="fz fz2">名称</th>
+            <th data-k="code">代码</th>
             <th data-k="price">现价</th>
             <th data-k="pct">涨跌幅</th>
             <th data-k="change">涨跌额</th>
@@ -176,8 +175,8 @@ function render(){
   document.getElementById("tbody").innerHTML = rows.map(s=>`
     <tr>
       <td class="fz fz1">${s.rank}</td>
-      <td class="fz fz2">${s.code}</td>
-      <td class="fz fz3">${s.name}</td>
+      <td class="fz fz2">${s.name}</td>
+      <td>${s.code}</td>
       <td>${fmtPrice(s.price, sym)}</td>
       <td class="${cls(s.pct)}">${fmtPct(s.pct)}</td>
       <td class="${cls(s.change)}">${s.change==null?"-":(s.change>0?"+":"")+s.change.toFixed(2)}</td>
