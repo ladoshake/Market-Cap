@@ -13,8 +13,8 @@ import time
 import requests
 
 DC = "https://datacenter-web.eastmoney.com/api/data/v1/get"
-SINA_US = "http://stock.finance.sina.com.cn/usstock/api/jsonp.php"
-SINA_HK = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHKStockData"
+SINA_US = "https://stock.finance.sina.com.cn/usstock/api/jsonp.php"
+SINA_HK = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHKStockData"
 GTIMG = "https://qt.gtimg.cn/q="
 OUT = "/Users/green/WorkBuddy/2026-07-21-16-50-33/data.json"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -214,8 +214,9 @@ def fetch_hk():
                 continue
             try:
                 code, f = parse_gt(line)
-                # 字段 44/45 为总市值（亿港元）；f[1] 为名称（含 -T/-R 后缀）
-                mv = to_float(f[44]) if f and len(f) > 44 else None
+                # f[45] = 总市值（亿港元，A+H 合计）；f[44] = H股流通市值（仅港股部分，会低估 A+H 公司）
+                # f[1] = 名称（含 -T/-R/-WR 后缀）
+                mv = to_float(f[45]) if f and len(f) > 45 else None
                 nm = f[1] if f and len(f) > 1 else None
                 if mv and mv > 0:
                     cap_map[code[2:]] = (mv, nm)   # hk00700 -> 00700
@@ -278,8 +279,21 @@ def main():
     a = fetch_a_share()
     print(f"  A股 {len(a)} 只，榜首 {a[0]['name']} {a[0]['total_mv']/10000:.2f}万亿")
     print("抓取 美股 ...")
-    us = fetch_us()
-    print(f"  美股 {len(us)} 只，榜首 {us[0]['name']} {us[0]['total_mv']/10000:.2f}万亿美元")
+    us = None
+    try:
+        us = fetch_us()
+        print(f"  美股 {len(us)} 只，榜首 {us[0]['name']} {us[0]['total_mv']/10000:.2f}万亿美元")
+    except Exception as e:
+        print(f"  [警告] 美股实时抓取失败：{e}")
+        # 美股源(stock.finance.sina.com.cn)偶发不可达时，回退到上次 data.json 的美股榜，
+        # 避免整次抓取失败；美股本身无市值口径 bug，用旧榜安全。
+        try:
+            old = json.load(open(OUT, encoding="utf-8"))
+            us = old.get("boards", {}).get("US", {}).get("stocks", [])
+            print(f"  已回退使用上次美股数据（{len(us)} 只）")
+        except Exception:
+            us = []
+            print("  且无历史美股数据可用，美股榜将为空")
     print("抓取 港股 ...")
     hk = fetch_hk()
     print(f"  港股 {len(hk)} 只，榜首 {hk[0]['name']} {hk[0]['total_mv']/10000:.2f}万亿港元")
