@@ -22,8 +22,8 @@ def main():
         f.write(html)
 
     n = {k: len(v["stocks"]) for k, v in payload["boards"].items()}
-    print(f"已生成 {OUT}（A股 {n['A']} / 港股 {n['HK']} / 美股 {n['US']} 只，"
-          f"更新于 {payload['updated']}）")
+    print(f"已生成 {OUT}（A股 {n['A']} / 港股 {n['HK']} / 美股 {n['US']} / "
+          f"日本 {n.get('JP',0)} / 韩国 {n.get('KR',0)} 只，更新于 {payload['updated']}）")
 
 
 TEMPLATE = r"""<!DOCTYPE html>
@@ -31,7 +31,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>A股市值 Top30 排行榜</title>
+<title>市值 Top30 排行榜</title>
 <style>
   :root{
     --bg:#f5f7fa; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
@@ -122,13 +122,13 @@ TEMPLATE = r"""<!DOCTYPE html>
     </div>
   </div>
 
-  <footer>数据来源：东方财富 / 新浪财经 / 腾讯证券 · 市值单位为本币（亿 / 万亿）· 仅供参考，不构成投资建议</footer>
+  <footer>数据来源：东方财富 / 新浪财经 / 腾讯证券 / CompaniesMarketCap · 市值单位为本币（亿 / 万亿）· 仅供参考，不构成投资建议</footer>
 </div>
 
 <script>
 const PAYLOAD = /*__DATA__*/;
-const BOARD_ORDER = ["A","HK","US"];
-const CUR_NAME = {CNY:"元", HKD:"港元", USD:"美元"};
+const BOARD_ORDER = ["A","HK","US","JP","KR"];
+const CUR_NAME = {CNY:"元", HKD:"港元", USD:"美元", JPY:"日元", KRW:"韩元"};
 let currentBoard = "A";
 let sortKey = "rank", sortDir = 1;
 
@@ -143,7 +143,7 @@ const cls = v => v == null ? "flat" : (v>0?"up":(v<0?"down":"flat"));
 
 // 副标题
 document.getElementById("sub").textContent =
-  `更新时间 ${PAYLOAD.updated} · 共三大市场榜单`;
+  `更新时间 ${PAYLOAD.updated} · 共 ${BOARD_ORDER.length} 大市场榜单`;
 
 // Tab 渲染
 const tabsEl = document.getElementById("tabs");
