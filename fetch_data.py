@@ -7,6 +7,8 @@
 - 港股 : 新浪港股全量代码 + 腾讯 qt.gtimg.cn 批量行情（市值单位 亿港元/HKD）
 - 日本 : CompaniesMarketCap 市值榜取成分（本地代码），腾讯 qt.gtimg.cn 取实时市值（亿日元/JPY）
 - 韩国 : CompaniesMarketCap 市值榜取成分（本地代码），腾讯 qt.gtimg.cn 取实时市值（亿韩元/KRW）
+- 中文名 : 腾讯/CMarkCap 对日韩均只给英文名，无可靠免费中文名接口；故内置 CN_NAME_JP /
+          CN_NAME_KR 字典（本地代码->官方中文名），命中显示中文、未命中回退英文原名
 
 代理偶发抖动，所有请求均带重试。
 """
@@ -133,6 +135,33 @@ ADR_MAP_JP = {"MUFG": "8306", "TM": "7203", "SMFG": "8316", "SONY": "6758",
 ADR_MAP_KR = {"KB": "105560", "SHG": "055550", "WF": "316140", "PKX": "005490",
               "KEP": "015760", "SKM": "017670", "KT": "030200"}
 
+# 官方中文名映射（本地代码 -> 中文名）；未收录者回退英文原名。
+# 仅覆盖两市 Top30 常驻龙头，命中即显示中文名，避免依赖无中文接口的行情源。
+CN_NAME_JP = {
+    "8306": "三菱UFJ金融集团", "7203": "丰田汽车", "6098": "瑞可利控股",
+    "9984": "软银集团", "6857": "爱德万测试", "8316": "三井住友金融集团",
+    "6758": "索尼集团", "9983": "迅销", "6501": "日立制作所",
+    "8035": "东京电子", "285A": "铠侠控股", "6861": "基恩士",
+    "8411": "瑞穗金融集团", "8058": "三菱商事", "8766": "东京海上控股",
+    "8001": "伊藤忠商事", "8031": "三井物产", "9432": "日本电信电话",
+    "2914": "日本烟草", "6981": "村田制作所", "7011": "三菱重工",
+    "4519": "中外制药", "9434": "软银", "4063": "信越化学工业",
+    "7182": "日本邮政银行", "4502": "武田药品工业", "9433": "KDDI",
+    "7974": "任天堂", "6503": "三菱电机", "7741": "豪雅",
+}
+CN_NAME_KR = {
+    "005930": "三星电子", "000660": "SK海力士", "402340": "SK Square",
+    "009155": "三星电机", "373220": "LG新能源", "207940": "三星生物制剂",
+    "005380": "现代汽车", "105560": "KB金融集团", "028260": "三星物产",
+    "032830": "三星生命保险", "068270": "赛尔群", "006405": "三星SDI",
+    "055550": "新韩金融集团", "000270": "起亚", "012450": "韩华航空航天",
+    "034020": "斗山能源", "086790": "韩亚金融集团", "012330": "现代摩比斯",
+    "329180": "HD现代重工", "034730": "SK控股", "000810": "三星火灾海上保险",
+    "035420": "NAVER", "066570": "LG电子", "316140": "友利金融集团",
+    "010120": "LS电气", "096770": "SK创新", "096775": "SK创新",
+    "138040": "梅里茨金融集团", "005490": "POSCO控股",
+}
+
 
 def cmc_universe(adr_map, is_jp):
     """抓取 CompaniesMarketCap 的市值榜前 ~100，返回 [(本地代码, 板块), ...]。"""
@@ -162,7 +191,7 @@ def cmc_universe(adr_map, is_jp):
     return out
 
 
-def _fetch_jpkr(prefix, adr_map, is_jp, label):
+def _fetch_jpkr(prefix, adr_map, is_jp, label, cn_map=None):
     """通用：取市值榜 universe -> 腾讯行情 -> 按市值排名 Top30。"""
     try:
         uni = cmc_universe(adr_map, is_jp)
@@ -176,8 +205,10 @@ def _fetch_jpkr(prefix, adr_map, is_jp, label):
         info = q.get(prefix + c)
         if not info or info["mv"] is None:
             continue
+        # 优先用官方中文名，未收录则回退腾讯英文原名
+        name = (cn_map or {}).get(c, info["name"])
         recs.append({
-            "rank": 0, "code": c, "name": info["name"],
+            "rank": 0, "code": c, "name": name,
             "price": info["price"], "pct": info["pct"], "change": info["change"],
             "total_mv": info["mv"], "float_mv": None, "pe": info["pe"], "board": board,
         })
@@ -189,11 +220,11 @@ def _fetch_jpkr(prefix, adr_map, is_jp, label):
 
 
 def fetch_jp():
-    return _fetch_jpkr("jp", ADR_MAP_JP, True, "日本")
+    return _fetch_jpkr("jp", ADR_MAP_JP, True, "日本", CN_NAME_JP)
 
 
 def fetch_kr():
-    return _fetch_jpkr("kr", ADR_MAP_KR, False, "韩国")
+    return _fetch_jpkr("kr", ADR_MAP_KR, False, "韩国", CN_NAME_KR)
 
 
 # ---------- A股 ----------
