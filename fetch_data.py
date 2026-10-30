@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""抓取 A股 / 港股 / 美股 市值 Top30，输出 data.json（数据内嵌，无外部依赖）。
+"""抓取 A股 / 港股 / 美股 / 日本 / 韩国 市值 Top30，输出 data.json（数据内嵌，无外部依赖）。
 
 数据来源（均经沙箱代理可达）：
 - A股 : 东方财富数据中心 datacenter-web.eastmoney.com 估值分析报表（总市值，单位 元/CNY）
 - 美股 : 新浪 US_CategoryService.getList（含 mktcap，单位 美元/USD），按市值降序
 - 港股 : 新浪港股全量代码 + 腾讯 qt.gtimg.cn 批量行情（市值单位 亿港元/HKD）
+- 日本 : CompaniesMarketCap 市值榜取成分（本地代码），腾讯 qt.gtimg.cn 取实时市值（亿日元/JPY）
+- 韩国 : CompaniesMarketCap 市值榜取成分（本地代码），腾讯 qt.gtimg.cn 取实时市值（亿韩元/KRW）
 
 代理偶发抖动，所有请求均带重试。
 """
 import json
+import re
 import time
 import requests
 
@@ -79,6 +82,118 @@ def to_float(x):
         return float(x)
     except Exception:
         return None
+
+
+# ---------- 腾讯 gtimg 批量行情（A股/港股/美股/日股/韩股 通用）----------
+def parse_gt_line(line):
+    """解析 qt.gtimg.cn 单行：v_<code>= "f1~f2~..." 返回 (code, fields)。"""
+    parts = line.split('"')
+    if len(parts) < 2:
+        return None, None
+    code = parts[0].split('v_')[-1].rstrip('= ').strip()
+    return code, parts[1].split('~')
+
+
+def gtimg_quotes(keys):
+    """批量取腾讯行情，返回 {gtimg_code: {name,price,pct,change,mv(亿本币),pe}}。"""
+    out = {}
+    for i in range(0, len(keys), 80):
+        batch = keys[i:i + 80]
+        txt = get_text(GTIMG + ",".join(batch))
+        for line in txt.strip().split(";"):
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            try:
+                code, f = parse_gt_line(line)
+                if not f or len(f) < 46:
+                    continue
+                mv = to_float(f[45])  # 总市值（亿本币）
+                if not mv:
+                    continue
+                pe = None
+                if len(f) > 39 and f[39] not in ("", "0", "-"):
+                    pe = to_float(f[39])
+                out[code] = {
+                    "name": f[1], "price": to_float(f[3]),
+                    "pct": to_float(f[32]), "change": to_float(f[31]),
+                    "mv": mv, "pe": pe,
+                }
+            except Exception:
+                continue
+    return out
+
+
+# ---------- 日本 / 韩国 股票列表（来自 CompaniesMarketCap 市值榜）----------
+CMC_JP = "https://companiesmarketcap.com/japan/largest-companies-in-japan-by-market-cap/"
+CMC_KR = "https://companiesmarketcap.com/south-korea/largest-companies-in-south-korea-by-market-cap/"
+# 知名跨国公司的 ADR 代码 -> 本地交易所代码（保证龙头公司能解析到本地股本）
+ADR_MAP_JP = {"MUFG": "8306", "TM": "7203", "SMFG": "8316", "SONY": "6758",
+              "MFG": "8411", "TAK": "4502", "HMC": "7267", "IX": "8591"}
+ADR_MAP_KR = {"KB": "105560", "SHG": "055550", "WF": "316140", "PKX": "005490",
+              "KEP": "015760", "SKM": "017670", "KT": "030200"}
+
+
+def cmc_universe(adr_map, is_jp):
+    """抓取 CompaniesMarketCap 的市值榜前 ~100，返回 [(本地代码, 板块), ...]。"""
+    url = CMC_JP if is_jp else CMC_KR
+    txt = get_text(url)
+    rows = re.findall(r'<tr[^>]*>.*?</tr>', txt, re.S)
+    out = []
+    seen = set()
+    for row in rows[1:]:
+        m_code = re.search(r'class="company-code"><span[^>]*></span>([^<]+)<', row)
+        if not m_code:
+            continue
+        c = m_code.group(1).strip()
+        if c.endswith(".T"):
+            code, board = c[:-2], "东证"
+        elif c.endswith(".KS"):
+            code, board = c[:-3], "KOSPI"
+        elif c.endswith(".KQ"):
+            code, board = c[:-3], "KOSDAQ"
+        elif c in adr_map:
+            code, board = adr_map[c], ("东证" if is_jp else "KOSPI")
+        else:
+            continue  # 跳过无法解析为本地的 ADR
+        if code and code not in seen:
+            seen.add(code)
+            out.append((code, board))
+    return out
+
+
+def _fetch_jpkr(prefix, adr_map, is_jp, label):
+    """通用：取市值榜 universe -> 腾讯行情 -> 按市值排名 Top30。"""
+    try:
+        uni = cmc_universe(adr_map, is_jp)
+    except Exception as e:
+        print(f"  [警告] {label} 列表获取失败：{e}")
+        return None
+    keys = [prefix + c for c, _ in uni]
+    q = gtimg_quotes(keys)
+    recs = []
+    for c, board in uni:
+        info = q.get(prefix + c)
+        if not info or info["mv"] is None:
+            continue
+        recs.append({
+            "rank": 0, "code": c, "name": info["name"],
+            "price": info["price"], "pct": info["pct"], "change": info["change"],
+            "total_mv": info["mv"], "float_mv": None, "pe": info["pe"], "board": board,
+        })
+    recs.sort(key=lambda r: r["total_mv"], reverse=True)
+    top = recs[:30]
+    for i, r in enumerate(top, 1):
+        r["rank"] = i
+    return top
+
+
+def fetch_jp():
+    return _fetch_jpkr("jp", ADR_MAP_JP, True, "日本")
+
+
+def fetch_kr():
+    return _fetch_jpkr("kr", ADR_MAP_KR, False, "韩国")
 
 
 # ---------- A股 ----------
@@ -298,12 +413,40 @@ def main():
     hk = fetch_hk()
     print(f"  港股 {len(hk)} 只，榜首 {hk[0]['name']} {hk[0]['total_mv']/10000:.2f}万亿港元")
 
+    print("抓取 日本 ...")
+    jp = fetch_jp()
+    if jp is None:  # 列表获取失败，回退上次数据
+        try:
+            old = json.load(open(OUT, encoding="utf-8"))
+            jp = old.get("boards", {}).get("JP", {}).get("stocks", [])
+            print(f"  [警告] 日本实时列表获取失败，回退上次数据（{len(jp)} 只）")
+        except Exception:
+            jp = []
+            print("  [警告] 日本列表获取失败且无历史数据，日本榜将为空")
+    else:
+        print(f"  日本 {len(jp)} 只，榜首 {jp[0]['name']} {jp[0]['total_mv']/10000:.2f}万亿日元")
+
+    print("抓取 韩国 ...")
+    kr = fetch_kr()
+    if kr is None:
+        try:
+            old = json.load(open(OUT, encoding="utf-8"))
+            kr = old.get("boards", {}).get("KR", {}).get("stocks", [])
+            print(f"  [警告] 韩国实时列表获取失败，回退上次数据（{len(kr)} 只）")
+        except Exception:
+            kr = []
+            print("  [警告] 韩国列表获取失败且无历史数据，韩国榜将为空")
+    else:
+        print(f"  韩国 {len(kr)} 只，榜首 {kr[0]['name']} {kr[0]['total_mv']/10000:.2f}万亿韩元")
+
     payload = {
         "updated": time.strftime("%Y-%m-%d %H:%M:%S"),
         "boards": {
             "A": {"name": "A股", "currency": "CNY", "symbol": "¥", "stocks": a},
             "HK": {"name": "港股", "currency": "HKD", "symbol": "HK$", "stocks": hk},
             "US": {"name": "美股", "currency": "USD", "symbol": "$", "stocks": us},
+            "JP": {"name": "日本", "currency": "JPY", "symbol": "¥", "stocks": jp},
+            "KR": {"name": "韩国", "currency": "KRW", "symbol": "₩", "stocks": kr},
         },
     }
     with open(OUT, "w", encoding="utf-8") as f:
